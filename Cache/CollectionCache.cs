@@ -13,7 +13,7 @@ namespace Cache
         private static Cache<T> _cache;
         private static readonly ConcurrentDictionary<object, List<object>> Storage = new ConcurrentDictionary<object, List<object>>();
         private readonly TimeSpan _defaultTimeout = TimeSpan.FromMinutes(10);
-        public CollectionCache(Func<T,object> singleItemKeySelector)
+        public CollectionCache(Func<T, object> singleItemKeySelector)
         {
             if (_cache == null)
             {
@@ -22,7 +22,7 @@ namespace Cache
         }
 
         private const string DEFAULTKEY = "__ALL__";
-        public void Add(object key, IEnumerable<T> value, Action<IEnumerable<T>> collectionWritethrough = null,TimeSpan? expiration = null)
+        public void Add(object key, IEnumerable<T> value, Action<IEnumerable<T>> collectionWritethrough = null, TimeSpan? expiration = null)
         {
             var ids = value.Select(x => _cache.Selector.Invoke(x)).ToList();
             Storage[key ?? DEFAULTKEY] = ids;
@@ -38,15 +38,15 @@ namespace Cache
 
         private void ClearKey(object key, bool timedOut)
         {
-            Clear(key); 
+            Clear(key);
         }
 
-        public IEnumerable<T> Get(object key, Func<object, IEnumerable<T>> collectionReadthrough = null,TimeSpan? expirationInCaseOfReadThrough = null)
+        public IEnumerable<T> Get(object key, Func<object, IEnumerable<T>> collectionReadthrough = null, TimeSpan? expirationInCaseOfReadThrough = null)
         {
 
             if (key == null)
             {
-                 
+
                 if (collectionReadthrough != null && _cache.ItemsInCache == 0)
                 {
                     var items = collectionReadthrough.Invoke(key).ToList();
@@ -67,17 +67,17 @@ namespace Cache
             if (collectionReadthrough != null)
             {
                 var items = collectionReadthrough.Invoke(key).ToList();
-                Add(key,items,null,expirationInCaseOfReadThrough??_defaultTimeout);
+                Add(key, items, null, expirationInCaseOfReadThrough ?? _defaultTimeout);
                 return items;
             }
             return null;
         }
-        
+
         public long ItemsInCache
         {
             get { return Storage.Count; }
         }
-        
+
         public void Clear()
         {
             Storage.Clear();
@@ -89,6 +89,24 @@ namespace Cache
             Storage.TryRemove(key ?? DEFAULTKEY, out dummy);
         }
 
-        public Cache<T> ItemCache { get { return _cache; } } 
+        public Cache<T> ItemCache { get { return _cache; } }
+
+        public void Add(T item, Func<T> writethrough)
+        {
+            _cache.Add(item);
+            //add this to the "all" key for later
+            List<object> keys;
+            if (!Storage.TryGetValue(DEFAULTKEY, out keys)) return;
+            if (keys.All(x => x != _cache.Selector(item)))
+                keys.Add(_cache.Selector(item));
+            Storage[DEFAULTKEY] = keys;
+        }
+
+        public void FlushCollectionCacheLeaveItems()
+        {
+            var keys = Storage.Keys.ToList();
+            foreach (var key in keys)
+                Clear(key);
+        }
     }
 }
