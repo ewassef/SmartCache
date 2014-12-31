@@ -21,7 +21,7 @@ namespace Cache
             }
         }
 
-        private const string DEFAULTKEY = "__ALL__";
+        public const string DEFAULTKEY = "__ALL__";
         public void Add(object key, IEnumerable<T> value, Action<IEnumerable<T>> collectionWritethrough = null, TimeSpan? expiration = null)
         {
             var ids = value.Select(x => _cache.Selector.Invoke(x)).ToList();
@@ -61,7 +61,7 @@ namespace Cache
             {
                 var collection = new Collection<T>();
                 keys.Select(x => _cache.Get(x)).ToList().ForEach(collection.Add);
-                return collection;
+                return collection.Where(x=>x!=null);
             }
             //get them and put them in the cache
             if (collectionReadthrough != null)
@@ -91,13 +91,13 @@ namespace Cache
 
         public Cache<T> ItemCache { get { return _cache; } }
 
-        public void Add(T item, Func<T> writethrough)
+        public void Add(T item, Action<T> writethrough = null)
         {
-            _cache.Add(item);
+            _cache.Add(item,writethrough);
             //add this to the "all" key for later
             List<object> keys;
             if (!Storage.TryGetValue(DEFAULTKEY, out keys)) return;
-            if (keys.All(x => x != _cache.Selector(item)))
+            if (keys.All(x => !x.Equals(_cache.Selector(item))))
                 keys.Add(_cache.Selector(item));
             Storage[DEFAULTKEY] = keys;
         }

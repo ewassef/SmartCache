@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.Runtime.Caching;
+using System.Xml.Serialization;
 
 namespace Cache
 {
@@ -61,6 +62,11 @@ namespace Cache
         public void Clear()
         {
             Storage.Clear();
+        }
+
+        public void Clear(T item)
+        {
+            Storage.TryRemove(Selector.Invoke(item),out item);
         }
     }
 }
