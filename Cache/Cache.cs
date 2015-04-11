@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.Runtime.Caching;
+using System.Threading;
 using System.Xml.Serialization;
 
 namespace Cache
@@ -9,7 +10,7 @@ namespace Cache
     public class Cache<T> where T : class
     {
         internal static readonly ConcurrentDictionary<object, T> Storage = new ConcurrentDictionary<object, T>();
-        internal static readonly ObjectCache cache = new MemoryCache(typeof(T).Name,new NameValueCollection());
+        private readonly TimeSpan _defaultTimeout = TimeSpan.FromMinutes(10);
         public Func<T, object> Selector { get; set; }
         public Action<T> Writethrough;
         public Func<object, T> Readthrough;
@@ -32,19 +33,19 @@ namespace Cache
                     item = Readthrough.Invoke(key);
                 }
                 if (item != null)
-                    Storage[Selector.Invoke(item)] =  item;
+                    Storage[Selector.Invoke(item)] = item;
             }
 
             return item;
         }
-        public void Add(T value, Action<T> writethroughOverride = null)
+        public void Add(T value, Action<T> writethroughOverride = null, TimeSpan? expiration = null)
         {
             if (Selector == null)
             {
                 throw new InvalidOperationException(
                     "You havent specified a Key Selector on this object, therefore, you cannot insert anything into the cache");
             }
-            Storage[Selector.Invoke(value)] =value;
+            Storage[Selector.Invoke(value)] = value;
             if (writethroughOverride != null)
             {
                 writethroughOverride.Invoke(value);
@@ -54,6 +55,8 @@ namespace Cache
                 {
                     Writethrough.Invoke(value);
                 }
+            ThreadPool.RegisterWaitForSingleObject(new AutoResetEvent(false), (i, g) => Clear(value), null, expiration ?? _defaultTimeout,
+                                                   true);
         }
         public long ItemsInCache
         {
@@ -63,10 +66,9 @@ namespace Cache
         {
             Storage.Clear();
         }
-
         public void Clear(T item)
         {
-            Storage.TryRemove(Selector.Invoke(item),out item);
+            Storage.TryRemove(Selector.Invoke(item), out item);
         }
     }
 }
