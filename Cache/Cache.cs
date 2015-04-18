@@ -38,7 +38,7 @@ namespace Cache
 
             return item;
         }
-        public void Add(T value, Action<T> writethroughOverride = null, TimeSpan? expiration = null)
+        public void Add(T value, Action<T> writethroughOverride = null, TimeSpan? expiration = null,Action<T> expiryCallback = null)
         {
             if (Selector == null)
             {
@@ -55,7 +55,13 @@ namespace Cache
                 {
                     Writethrough.Invoke(value);
                 }
-            ThreadPool.RegisterWaitForSingleObject(new AutoResetEvent(false), (i, g) => Clear(value), null, expiration ?? _defaultTimeout,
+            ThreadPool.RegisterWaitForSingleObject(new AutoResetEvent(false), (i, g) =>
+            {
+                Clear(value);
+                if (expiryCallback != null)
+                    expiryCallback(value);
+
+            }, null, expiration ?? _defaultTimeout,
                                                    true);
         }
         public long ItemsInCache

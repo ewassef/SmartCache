@@ -22,17 +22,22 @@ namespace Cache
         }
 
         public const string DEFAULTKEY = "__ALL__";
-        public void Add(object key, IEnumerable<T> value, Action<IEnumerable<T>> collectionWritethrough = null, TimeSpan? expiration = null)
+        public void Add(object key, IEnumerable<T> value, Action<IEnumerable<T>> collectionWritethrough = null, TimeSpan? expiration = null,Action<object> expirationCallback = null)
         {
             var ids = value.Select(x => _cache.Selector.Invoke(x)).ToList();
             Storage[key ?? DEFAULTKEY] = ids;
-            value.ToList().ForEach(x => _cache.Add(x));
+            value.ToList().ForEach(x => _cache.Add(x,null,expiration));
             if (collectionWritethrough != null)
             {
                 collectionWritethrough.Invoke(value);
             }
 
-            ThreadPool.RegisterWaitForSingleObject(new AutoResetEvent(false), ClearKey, key, expiration ?? _defaultTimeout,
+            ThreadPool.RegisterWaitForSingleObject(new AutoResetEvent(false), (a, b) =>
+            {
+                ClearKey(a, b);
+                if (expirationCallback != null)
+                    expirationCallback(key);
+            }, key, expiration ?? _defaultTimeout,
                                                    true);
         }
 
@@ -107,6 +112,12 @@ namespace Cache
             var keys = Storage.Keys.ToList();
             foreach (var key in keys)
                 Clear(key);
+        }
+
+        public IEnumerable<object> FindKeysReferencing(object itemKey)
+        {
+            var pairs = Storage.Where(x => x.Value == itemKey);
+            return pairs.Select(x => x.Key);
         }
     }
 }
