@@ -13,6 +13,8 @@ namespace Cache
         private static Cache<T> _cache;
         private static readonly ConcurrentDictionary<object, List<object>> Storage = new ConcurrentDictionary<object, List<object>>();
         private readonly TimeSpan _defaultTimeout = TimeSpan.FromMinutes(10);
+        public Func<IEnumerable<object> , IEnumerable<T>> MissingItemsReadthrough;
+
         public CollectionCache(Func<T, object> singleItemKeySelector)
         {
             if (_cache == null)
@@ -65,7 +67,26 @@ namespace Cache
             if (Storage.TryGetValue(key, out keys))
             {
                 var collection = new Collection<T>();
-                keys.Select(x => _cache.Get(x)).ToList().ForEach(collection.Add);
+                var missing = new List<object>();
+                keys.Select(x =>
+                {
+                    var item = _cache.Get(x);
+                    if (item == null)
+                        missing.Add(x);
+                    return item;
+                }).ToList().ForEach(collection.Add);
+                if (missing.Any() && MissingItemsReadthrough != null)
+                {
+                    var items = MissingItemsReadthrough(missing);
+                    if (items != null)
+                    {
+                        items.ToList().ForEach(i =>
+                        {
+                            _cache.Add(i, null, _defaultTimeout);
+                            collection.Add(i);
+                        });
+                    }
+                }
                 return collection.Where(x=>x!=null);
             }
             //get them and put them in the cache
