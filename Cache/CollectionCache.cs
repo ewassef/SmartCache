@@ -75,18 +75,33 @@ namespace Cache
                         missing.Add(x);
                     return item;
                 }).ToList().ForEach(collection.Add);
-                if (missing.Any() && MissingItemsReadthrough != null)
-                {
-                    var items = MissingItemsReadthrough(missing);
-                    if (items != null)
+                if (missing.Any())
+                    if (MissingItemsReadthrough != null)
                     {
-                        items.ToList().ForEach(i =>
+                        var items = MissingItemsReadthrough(missing);
+                        if (items != null)
                         {
-                            _cache.Add(i, null, _defaultTimeout);
-                            collection.Add(i);
-                        });
+                            items.ToList().ForEach(i =>
+                            {
+                                _cache.Add(i, null, _defaultTimeout);
+                                collection.Add(i);
+                            });
+                        }
                     }
-                }
+                    else
+                    {
+                        if (key.ToString() == DEFAULTKEY)
+                        {
+                            // There are missing items and we are asking for 'all', so go get them all again using the read threough
+                            if (collectionReadthrough != null)
+                            {
+                                var items = collectionReadthrough.Invoke(key).ToList();
+                                items.ForEach(x => _cache.Add(x));
+                                return items;
+                            }
+                            return Cache<T>.Storage.Select(x => x.Value);
+                        }
+                    }
                 return collection.Where(x=>x!=null);
             }
             //get them and put them in the cache
